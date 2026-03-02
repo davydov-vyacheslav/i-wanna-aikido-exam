@@ -7,6 +7,7 @@ enum Presets {
     // ── Aikikai ───────────────────────────────────────────
 // FIXME: as yaml storage ??? and more presice technics + link to orgin, like
     
+    // https://aikikai.or.jp/eng/hombudojo/grading
     static let aikikai = Profile(
         name: "Aikikai",
         technics: cartesian(
@@ -71,8 +72,4 @@ enum Presets {
         return result
     }
 
-    /// Creates a user-owned Profile pre-populated from a preset.
-    static func makeProfile(from preset: Profile, name: String) -> Profile {
-        Profile(name: name, technics: preset.technics, isPreset: false)
-    }
 }

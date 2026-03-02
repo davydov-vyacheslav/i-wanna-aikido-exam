@@ -8,8 +8,7 @@ struct ExamView: View {
     @Query private var profiles: [Profile]
 
     private var activeProfile: Profile? {
-        guard let id = settings.activeProfileID else { return nil }
-        return profiles.first { $0.id == id }
+        profiles.first { $0.id == settings.activeProfileID } ?? profiles.first
     }
 
     var body: some View {
@@ -26,16 +25,15 @@ struct ExamView: View {
                     Spacer()
                     // State indicator
                     Circle()
-                        .fill(stateColor)
+                        .fill(vm.state.color)
                         .frame(width: 8, height: 8)
-                        .animation(.easeInOut, value: vm.state)
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
 
                 // Feasibility warning
-                if let profile = activeProfile, !settings.canStart(profile: profile) {
-                    warnBanner(profile: profile)
+                if let profile = activeProfile, let reason = settings.cantStartReason(profile: profile) {
+                    warnBanner(reason: reason)
                 }
 
                 // Progress bar (exam-level)
@@ -51,17 +49,15 @@ struct ExamView: View {
                 Group {
                     if let t = vm.currentTechnic {
                         VStack(spacing: 12) {
-                            TechCard(label: ".label.exam.card.position", value: MasterPositions(rawValue: t.positionKey)!.l10n)
-                            TechCard(label: ".label.exam.card.attack", value: MasterAttacks(rawValue: t.attackKey)!.l10n)
-                            TechCard(label: ".label.exam.card.techniq", value: MasterTechnics(rawValue: t.techniqueKey)!.l10n)
+                            TechCard(value: MasterPositions(rawValue: t.positionKey)!.l10n)
+                            TechCard(value: MasterAttacks(rawValue: t.attackKey)!.l10n)
+                            TechCard(value: MasterTechnics(rawValue: t.techniqueKey)!.l10n)
                         }
 
                     } else {
-                        VStack(spacing: 16) {
-                            Text(".label.exam.aiki")
-                                .font(.system(size: 80, design: .serif))
-                                .opacity(0.12)
-                        }
+                        Text(".label.exam.aiki")
+                            .font(.system(size: 80, design: .serif))
+                            .opacity(0.12)
                     }
                 }
                 .padding(.horizontal, 20)
@@ -76,28 +72,27 @@ struct ExamView: View {
                 }
 
                 // Controls
-                Group {
-                    if vm.state == .running {
-                        HStack(spacing: 12) {
-                            ExamButton(
-                                icon:    "pause.fill",
-                                label:   ".button.exam.pause",
-                                enabled: true
-                            ) { vm.pause() }
-
-                            ExamButton(
-                                icon:    "forward.end.fill",
-                                label:   ".button.exam.skip",
-                                enabled: vm.canSkipNow
-                            ) { vm.skip() }
-                        }
-                    } else {
-                        ExamButton(
-                            icon:    "play.fill",
-                            label:   ".button.exam.start",
-                            enabled: vm.isFeasible && vm.state != .finished
-                        ) { vm.start() }
+                switch vm.state {
+                case .running:
+                    HStack(spacing: 12) {
+                        ExamButton(icon: "pause.fill", label: ".button.exam.pause", enabled: true) { vm.pause() }
+                        ExamButton(icon: "forward.end.fill", label: ".button.exam.skip", enabled: vm.canSkipNow) { vm.skip() }
                     }
+                case .paused:
+                    VStack(spacing: 8) {
+                        ExamButton(icon: "play.fill", label: ".button.exam.continue", enabled: true) { vm.start() }
+                        Button(role: .destructive) { vm.forceFinish() } label: {
+                            Label(".button.exam.finish", systemImage: "stop.fill")
+                                .font(.callout)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 10)
+                        }
+                        .tint(.orange)
+                    }
+                case .idle:
+                    ExamButton(icon: "play.fill", label: ".button.exam.start", enabled: vm.isFeasible) { vm.start() }
+                case .finished:
+                    EmptyView()   // handled by finishOverlay
                 }
             }
 
@@ -117,19 +112,10 @@ struct ExamView: View {
 
     // MARK: – Sub-views
 
-    private var stateColor: Color { // FIXME: extension of ExamState
-        switch vm.state {
-        case .idle:     return Color.secondary.opacity(0.5)
-        case .running:  return .red
-        case .paused:   return .orange
-        case .finished: return .green
-        }
-    }
-
-    private func warnBanner(profile: Profile) -> some View {
+    private func warnBanner(reason: LocalizedStringKey) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
-            Text(".error.exam.notEnoughTechniques \(profile.technics.count) \(vm.requiredTechniquesForTimedNoRepeat)")
+            Text(reason)
                 .font(.body)
         }
         .padding(10)
@@ -175,11 +161,8 @@ struct ExamView: View {
     }
 
     private var timedProgressLabel: String {
-        let elapsed = vm.examElapsed
-        let total   = settings.examTimeMinutes * 60
-        let rem     = max(0, total - elapsed)
-        let m = rem / 60; let s = rem % 60
-        return String(format: "%d:%02d", m, s)
+        let rem = max(0, settings.examTimeMinutes * 60 - vm.examElapsed)
+        return String(format: "%d:%02d", rem / 60, rem % 60)
     }
 
     private var timerBar: some View {
@@ -212,7 +195,8 @@ struct ExamView: View {
         ZStack {
             Color(.secondarySystemBackground).opacity(0.96).ignoresSafeArea()
             VStack(spacing: 20) {
-                Text(".label.exam.aiki").font(.system(size: 80, design: .serif)).foregroundColor(.red)
+                Text(".label.exam.aiki")
+                    .font(.system(size: 80, design: .serif)).foregroundColor(.red)
                 Text(".label.exam.finished")
                     .font(.title2)
                 Text(".label.exam.done.statistics \(vm.doneCount)")
@@ -223,7 +207,6 @@ struct ExamView: View {
                     .padding(.horizontal, 40)
                     .padding(.vertical, 14)
                     .cornerRadius(13)
-
             }
         }
     }
@@ -232,16 +215,15 @@ struct ExamView: View {
 // MARK: – TechCard
 
 private struct TechCard: View {
-    let label: String
     let value: LocalizedStringKey
 
     var body: some View {
         Text(value)
-            .font(.title)
+            .font(.largeTitle)
             .foregroundColor(.primary)
             .lineLimit(2)
-        .padding(.horizontal, 20)
-        .padding(.vertical, 16)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
     }
 }
 
@@ -269,4 +251,15 @@ private struct ExamButton: View {
         .tint(.red)
     }
 
+}
+
+extension ExamState {
+    var color: Color {
+        switch self {
+        case .idle:     return Color.secondary.opacity(0.5)
+        case .running:  return .red
+        case .paused:   return .orange
+        case .finished: return .green
+        }
+    }
 }

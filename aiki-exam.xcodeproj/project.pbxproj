@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		5E35E7AB2F564C3E0047ACD2 /* gong.caf in Resources */ = {isa = PBXBuildFile; fileRef = 5E35E7892F564C3E0047ACD2 /* gong.caf */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		5E1540DE2F543F7E00F79BAD /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -27,6 +31,7 @@
 		5E1540CE2F543F7D00F79BAD /* aiki-exam.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "aiki-exam.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		5E1540DD2F543F7E00F79BAD /* aiki-examTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "aiki-examTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		5E1540E72F543F7E00F79BAD /* aiki-examUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "aiki-examUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		5E35E7892F564C3E0047ACD2 /* gong.caf */ = {isa = PBXFileReference; lastKnownFileType = file; path = gong.caf; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -79,6 +84,7 @@
 				5E1540E02F543F7E00F79BAD /* aiki-examTests */,
 				5E1540EA2F543F7E00F79BAD /* aiki-examUITests */,
 				5E1540CF2F543F7D00F79BAD /* Products */,
+				5E35E7892F564C3E0047ACD2 /* gong.caf */,
 			);
 			sourceTree = "<group>";
 		};
@@ -212,6 +218,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5E35E7AB2F564C3E0047ACD2 /* gong.caf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

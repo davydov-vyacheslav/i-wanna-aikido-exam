@@ -13,7 +13,7 @@ struct SettingsView: View {
 
                 // Active Profile
                 Section(header: Text(".title.settings.profile")) {
-                    Picker(".label.settings.profile.current", selection: activeProfileBinding) {
+                    Picker(".label.settings.profile.current", selection: $settings.activeProfileID) {
                         ForEach(profiles) { p in
                             Text(p.name)
                                 .tag(Optional(p.id))
@@ -21,11 +21,10 @@ struct SettingsView: View {
                     }
                     .pickerStyle(.menu)
 
-                    // FIXME: reproduce me
                     // Feasibility warning when profile is selected but incompatible
-                    if let profile = activeProfile, !settings.canStart(profile: profile) {
+                    if let cantUseReason = settings.cantStartReason(profile: activeProfile) {
                         Label {
-                            Text(".error.settings.profile.incompatible \(settings.minimumTechniquesForTimedNoRepeat) \(profile.technics.count)") 
+                            Text(cantUseReason)
                                 .font(.footnote)
                         } icon: {
                             Image(systemName: "exclamationmark.triangle.fill")
@@ -36,7 +35,7 @@ struct SettingsView: View {
 
                     Toggle(".label.settings.profile.allow_repeat", isOn: $settings.allowRepeat)
                     Toggle(".label.settings.profile.allow_sound", isOn: $settings.soundEnabled)
-// TODO: implement in next revision Toggle(".label.settings.profile.allow_randomize", isOn: $settings.randomize)
+                    Toggle(".label.settings.profile.allow_randomize", isOn: $settings.randomize)
                     
                 }
 
@@ -99,15 +98,8 @@ struct SettingsView: View {
 
     // MARK: – Helpers
 
-    private var activeProfile: Profile? {
-        guard let id = settings.activeProfileID else { return nil }
-        return profiles.first { $0.id == id }
+    private var activeProfile: Profile {
+        profiles.first { $0.id == settings.activeProfileID } ?? profiles[0]
     }
 
-    private var activeProfileBinding: Binding<UUID?> {
-        Binding(
-            get: { settings.activeProfileID },
-            set: { settings.activeProfileID = $0 }
-        )
-    }
 }

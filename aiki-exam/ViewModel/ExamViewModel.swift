@@ -32,8 +32,12 @@ final class ExamViewModel: ObservableObject {
 
     // ── Internal ──────────────────────────────────────────
 
-    /// Tracks which technics have been shown (no-repeat mode).
-    private var seenIDs: Set<String> = []
+    /// IDs excluded from pool: completed + skipped (used when allowRepeat = false).
+    private var usedIDs: Set<String> = []
+    
+    /// Ordered queue used when allowRepeat = true && randomize = false.
+    /// Completed and skipped items are appended to the end.
+    private var orderedQueue: [TechnicItem] = []
 
     private var techniqueTimer: Timer?
     private var progressTimer: Timer?
@@ -59,8 +63,14 @@ final class ExamViewModel: ObservableObject {
 
     func start() {
         guard state != .running, let profile, settings.canStart(profile: profile) else { return }
-        if state == .idle, currentTechnic == nil {
-            currentTechnic = pickNext()
+        if state == .idle {
+            // Initialise queue / pool for the new exam run
+            if settings.allowRepeat && !settings.randomize {
+                orderedQueue = Array(profile.technics)
+            }
+            if currentTechnic == nil {
+                currentTechnic = dequeueNext()
+            }
         }
         state = .running
         startTimers()
@@ -72,11 +82,32 @@ final class ExamViewModel: ObservableObject {
         stopTimers()
     }
 
+    /// Skips the current technique:
+    /// - allowRepeat=false  → adds to usedIDs (permanently removed from pool).
+    /// - allowRepeat=true, randomize=false → deferred to end of ordered queue.
+    /// - allowRepeat=true, randomize=true  → excluded only from the immediate next pick.
     func skip() {
-        guard state == .running, canSkipNow else { return }
+        guard state == .running, canSkipNow, let current = currentTechnic else { return }
         skippedCount += 1
-        currentTechnic = pickNext(excluding: currentTechnic)
+
+        if settings.allowRepeat && !settings.randomize {
+            orderedQueue.append(current)          // defer to end of queue
+            currentTechnic = orderedQueue.isEmpty ? nil : orderedQueue.removeFirst()
+        } else if !settings.allowRepeat {
+            usedIDs.insert(current.id)            // permanently remove from pool
+            currentTechnic = dequeueNext(excluding: current)
+        } else {
+            // allowRepeat=true, randomize=true: just pick a different random
+            currentTechnic = dequeueNext(excluding: current)
+        }
+
         restartTechniqueTimer()
+    }
+    
+    /// Forces an immediate finish regardless of exam mode / progress.
+    func forceFinish() {
+        guard state == .running || state == .paused else { return }
+        finish()
     }
 
     func reset() {
@@ -87,18 +118,29 @@ final class ExamViewModel: ObservableObject {
         skippedCount    = 0
         timerProgress   = 1.0
         examElapsed     = 0
-        seenIDs         = []
+        usedIDs         = []
+        orderedQueue    = []
     }
 
     // MARK: – Computed helpers
 
     var canSkipNow: Bool {
         guard state == .running, let current = currentTechnic else { return false }
+
+        if settings.allowRepeat && !settings.randomize {
+            // Queue must have at least one other item waiting
+            return !orderedQueue.isEmpty
+        }
+
+        let poolAfterSkip = availablePool(excluding: current)
+        guard !poolAfterSkip.isEmpty else { return false }
+
+        // Time mode + no-repeat: ensure enough unique techniques cover remaining time
         if settings.examMode == .time, !settings.allowRepeat {
-            let remaining = remainingExamSeconds
-            // Pool after removing current from seen + skip
-            let poolSize = pool(excluding: current).count
-            return settings.canSkip(remainingSeconds: remaining, poolSizeAfterSkip: poolSize)
+            return settings.canSkip(
+                remainingSeconds: remainingExamSeconds,
+                poolSizeAfterSkip: poolAfterSkip.count
+            )
         }
         return true
     }
@@ -122,10 +164,6 @@ final class ExamViewModel: ObservableObject {
     var isFeasible: Bool {
         guard let profile else { return false }
         return settings.canStart(profile: profile)
-    }
-
-    var requiredTechniquesForTimedNoRepeat: Int {
-        settings.minimumTechniquesForTimedNoRepeat
     }
 
     // MARK: – Timer management
@@ -184,23 +222,34 @@ final class ExamViewModel: ObservableObject {
         }
     }
 
-    private func advanceTechnique() {
+    /// Marks the current technique as done, picks the next one, and checks finish conditions.
+    /// Exposed as `internal` so unit tests can drive state without real timers.
+    func advanceTechnique() {
         guard state == .running else { return }
 
         // Mark current as done
         if let current = currentTechnic {
-            seenIDs.insert(current.id)
             doneCount += 1
             playSound()
+
+            if settings.allowRepeat && !settings.randomize {
+                // Cycle: append done item back to end of queue
+                orderedQueue.append(current)
+            } else {
+                // Pool mode: mark as used so it won't reappear
+                usedIDs.insert(current.id)
+            }
         }
 
-        // Check finish conditions
+        // Check finish conditions before picking next
         if settings.examMode == .count, doneCount >= settings.examCountTarget {
             finish(); return
         }
-        let next = pickNext()
-        if next == nil, !settings.allowRepeat {
-            finish(); return          // pool exhausted
+
+        // Pick next
+        let next = dequeueNext()
+        if next == nil && !settings.allowRepeat {
+            finish(); return          // pool exhausted in no-repeat mode
         }
         currentTechnic = next
         restartProgressBar()
@@ -217,24 +266,42 @@ final class ExamViewModel: ObservableObject {
         state = .finished
     }
 
-    // MARK: – Technique pool
+    // MARK: – Technique selection
 
-    /// Returns a random technic from the available pool (respecting allowRepeat and seenIDs),
-    /// optionally excluding one specific technic (for skip).
-    private func pickNext(excluding exclude: TechnicItem? = nil) -> TechnicItem? {
-        // FIMXE: sue randomize flag
-        var candidates = pool()
+    /// Returns the next technique to display.
+    /// Routing logic:
+    ///   - allowRepeat=true, randomize=false → pop from front of orderedQueue
+    ///   - allowRepeat=true, randomize=true  → random from full profile pool (excluding `exclude`)
+    ///   - allowRepeat=false, randomize=true → random from unseen pool
+    ///   - allowRepeat=false, randomize=false → first of unseen pool (original insertion order)
+    private func dequeueNext(excluding exclude: TechnicItem? = nil) -> TechnicItem? {
+        if settings.allowRepeat && !settings.randomize {
+            // Queue mode: consume from front
+            if orderedQueue.isEmpty { return nil }
+            let item = orderedQueue.removeFirst()
+            // If caller excluded this item (edge case during skip), defer it and try next
+            if let ex = exclude, item.id == ex.id {
+                orderedQueue.append(item)
+                return orderedQueue.isEmpty ? nil : orderedQueue.removeFirst()
+            }
+            return item
+        }
+
+        // Pool-based modes
+        var candidates = availablePool()
         if let ex = exclude {
             candidates = candidates.filter { $0.id != ex.id }
         }
-        return candidates.randomElement()
+        return settings.randomize ? candidates.randomElement() : candidates.first
     }
 
-    private func pool(excluding exclude: TechnicItem? = nil) -> [TechnicItem] {
+    /// Returns the pool of candidates eligible for selection.
+    /// When allowRepeat=false, excludes items already in usedIDs (done + skipped).
+    private func availablePool(excluding exclude: TechnicItem? = nil) -> [TechnicItem] {
         guard let profile else { return [] }
         var base = profile.technics
         if !settings.allowRepeat {
-            base = base.filter { !seenIDs.contains($0.id) }
+            base = base.filter { !usedIDs.contains($0.id) }
         }
         if let ex = exclude {
             base = base.filter { $0.id != ex.id }
@@ -244,10 +311,29 @@ final class ExamViewModel: ObservableObject {
 
     // MARK: – Sound
 
+    private func configureAudioSession() {
+        let session = AVAudioSession.sharedInstance()
+        try? session.setCategory(.playback, options: .mixWithOthers)
+        try? session.setActive(true)
+    }
+
     private func playSound() {
         guard settings.soundEnabled else { return }
-        // In production use AudioServicesPlaySystemSound or a bundled .wav
-        // Here we use system "Tock" sound (id 1104)
-        AudioServicesPlaySystemSound(1104)
+
+        guard let url = Bundle.main.url(forResource: "gong", withExtension: "caf") else {
+            AudioServicesPlaySystemSound(1304)
+            return
+        }
+
+        configureAudioSession()
+
+        do {
+            audioPlayer = try AVAudioPlayer(contentsOf: url)
+            audioPlayer?.volume = 1.0
+            audioPlayer?.prepareToPlay()
+            audioPlayer?.play()
+        } catch {
+            assertionFailure("AVAudioPlayer error: \(error)")
+        }
     }
 }

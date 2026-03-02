@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import SwiftUI
 
 // MARK: – Exam mode
 
@@ -29,38 +30,76 @@ private enum UDKey {
 final class AppSettings: ObservableObject {
 
     static let shared = AppSettings()
-    private init() {}
 
-    @Published var randomize: Bool = ud.bool(forKey: UDKey.randomize, default: false) {
+    // MARK: – Published properties
+
+    @Published var randomize: Bool {
         didSet { ud.set(randomize, forKey: UDKey.randomize) }
     }
 
-    @Published var examMode: ExamMode = ud.decoded(forKey: UDKey.examMode, default: .count) {
+    @Published var examMode: ExamMode {
         didSet { ud.set(examMode.rawValue, forKey: UDKey.examMode) }
     }
 
-    @Published var examCountTarget: Int = ud.int(forKey: UDKey.examCountTarget, default: 10) {
+    @Published var examCountTarget: Int {
         didSet { ud.set(examCountTarget, forKey: UDKey.examCountTarget) }
     }
 
-    @Published var examTimeMinutes: Int = ud.int(forKey: UDKey.examTimeMinutes, default: 5) {
+    @Published var examTimeMinutes: Int {
         didSet { ud.set(examTimeMinutes, forKey: UDKey.examTimeMinutes) }
     }
 
-    @Published var intervalSeconds: Int = ud.int(forKey: UDKey.intervalSeconds, default: 30) {
+    @Published var intervalSeconds: Int {
         didSet { ud.set(intervalSeconds, forKey: UDKey.intervalSeconds) }
     }
 
-    @Published var allowRepeat: Bool = ud.bool(forKey: UDKey.allowRepeat, default: true) {
+    @Published var allowRepeat: Bool {
         didSet { ud.set(allowRepeat, forKey: UDKey.allowRepeat) }
     }
 
-    @Published var soundEnabled: Bool = ud.bool(forKey: UDKey.soundEnabled, default: true) {
+    @Published var soundEnabled: Bool {
         didSet { ud.set(soundEnabled, forKey: UDKey.soundEnabled) }
     }
 
-    @Published var activeProfileID: UUID? = ud.uuid(forKey: UDKey.activeProfileID) {
+    @Published var activeProfileID: UUID? {
         didSet { ud.set(activeProfileID?.uuidString, forKey: UDKey.activeProfileID) }
+    }
+
+    // MARK: – Private storage
+
+    private let ud: UserDefaults
+
+    // MARK: – Initialisers
+
+    /// Convenience singleton init – uses UserDefaults.standard.
+    private convenience init() {
+        self.init(userDefaults: .standard)
+    }
+
+    /// Designated init. Exposed as `internal` so unit tests can inject an
+    /// isolated suite without touching the real app's UserDefaults.
+    init(
+        userDefaults: UserDefaults,
+        allowRepeat: Bool    = true,
+        randomize: Bool      = false,
+        examMode: ExamMode   = .count,
+        examCountTarget: Int = 10,
+        examTimeMinutes: Int = 5,
+        intervalSeconds: Int = 30,
+        soundEnabled: Bool   = true,
+        activeProfileID: UUID? = nil
+    ) {
+        self.ud = userDefaults
+
+        // Use persisted value if present, otherwise fall back to parameter default.
+        self.randomize        = userDefaults.bool(forKey: UDKey.randomize,       default: randomize)
+        self.examMode         = userDefaults.decoded(forKey: UDKey.examMode,      default: examMode)
+        self.examCountTarget  = userDefaults.int(forKey: UDKey.examCountTarget,   default: examCountTarget)
+        self.examTimeMinutes  = userDefaults.int(forKey: UDKey.examTimeMinutes,   default: examTimeMinutes)
+        self.intervalSeconds  = userDefaults.int(forKey: UDKey.intervalSeconds,   default: intervalSeconds)
+        self.allowRepeat      = userDefaults.bool(forKey: UDKey.allowRepeat,      default: allowRepeat)
+        self.soundEnabled     = userDefaults.bool(forKey: UDKey.soundEnabled,     default: soundEnabled)
+        self.activeProfileID  = userDefaults.uuid(forKey: UDKey.activeProfileID) ?? activeProfileID
     }
 
     // MARK: – Feasibility
@@ -72,34 +111,39 @@ final class AppSettings: ObservableObject {
 
     /// Whether a given profile can start the exam under current settings.
     func canStart(profile: Profile) -> Bool {
-        guard !profile.technics.isEmpty else { return false }
-        if examMode == .time && !allowRepeat {
-            return profile.technics.count >= minimumTechniquesForTimedNoRepeat
-        } else if examMode == .count && !allowRepeat {
-            return profile.technics.count >= examCountTarget
-        }
-        return true
+        cantStartReason(profile: profile) == nil
     }
 
-    /// Whether a skip is safe: won't leave fewer unique techs than
-    /// the time remaining requires.
-    func canSkip(
-        remainingSeconds: Int,
-        poolSizeAfterSkip: Int
-    ) -> Bool {
+    func cantStartReason(profile: Profile) -> LocalizedStringKey? {
+        // Always invalid: interval longer than total exam duration
+        if examMode == .time, (examTimeMinutes * 60) < intervalSeconds {
+            return ".error.settings.profile.incompatible_by_interval_value_for_exam"
+        }
+        // No-repeat feasibility checks
+        if !allowRepeat {
+            switch examMode {
+            case .count:
+                if profile.technics.count < examCountTarget {
+                    return ".error.settings.profile.incompatible_by_technics_count \(examCountTarget) \(profile.technics.count)"
+                }
+            case .time:
+                if profile.technics.count < minimumTechniquesForTimedNoRepeat {
+                    return ".error.settings.profile.incompatible_by_time_count \(minimumTechniquesForTimedNoRepeat) \(profile.technics.count)"
+                }
+            }
+        }
+        return nil
+    }
+
+    /// Whether a skip is safe: won't leave fewer unique techs than the time remaining requires.
+    func canSkip(remainingSeconds: Int, poolSizeAfterSkip: Int) -> Bool {
         guard examMode == .time, !allowRepeat else { return true }
         let needed = Int(ceil(Double(remainingSeconds) / Double(intervalSeconds)))
         return poolSizeAfterSkip >= needed
-        // TODO: process count based mode
     }
 }
 
-// MARK: – Helpers
-private let ud = UserDefaults.standard
-
-private extension Int {
-    var nonZero: Int? { self == 0 ? nil : self }
-}
+// MARK: – UserDefaults helpers
 
 private extension UserDefaults {
 
@@ -119,6 +163,6 @@ private extension UserDefaults {
     func decoded<T: RawRepresentable>(forKey key: String, default fallback: T) -> T
         where T.RawValue == String
     {
-        (string(forKey: key)).flatMap(T.init(rawValue:)) ?? fallback
+        string(forKey: key).flatMap(T.init(rawValue:)) ?? fallback
     }
 }
