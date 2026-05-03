@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		5E35E7AB2F564C3E0047ACD2 /* gong.caf in Resources */ = {isa = PBXBuildFile; fileRef = 5E35E7892F564C3E0047ACD2 /* gong.caf */; };
+		5EBE86722FA74769000E7854 /* defaults.yaml in Resources */ = {isa = PBXBuildFile; fileRef = 5EBE86712FA74763000E7854 /* defaults.yaml */; };
+		5EE931432FA78BE000D3C9D0 /* Yams in Frameworks */ = {isa = PBXBuildFile; productRef = 5EE931422FA78BE000D3C9D0 /* Yams */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -32,6 +34,7 @@
 		5E1540DD2F543F7E00F79BAD /* aiki-examTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "aiki-examTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		5E1540E72F543F7E00F79BAD /* aiki-examUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "aiki-examUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		5E35E7892F564C3E0047ACD2 /* gong.caf */ = {isa = PBXFileReference; lastKnownFileType = file; path = gong.caf; sourceTree = "<group>"; };
+		5EBE86712FA74763000E7854 /* defaults.yaml */ = {isa = PBXFileReference; lastKnownFileType = text.yaml; path = defaults.yaml; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -57,6 +60,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5EE931432FA78BE000D3C9D0 /* Yams in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -85,6 +89,7 @@
 				5E1540EA2F543F7E00F79BAD /* aiki-examUITests */,
 				5E1540CF2F543F7D00F79BAD /* Products */,
 				5E35E7892F564C3E0047ACD2 /* gong.caf */,
+				5EBE86712FA74763000E7854 /* defaults.yaml */,
 			);
 			sourceTree = "<group>";
 		};
@@ -118,6 +123,7 @@
 			);
 			name = "aiki-exam";
 			packageProductDependencies = (
+				5EE931422FA78BE000D3C9D0 /* Yams */,
 			);
 			productName = "aiki-exam";
 			productReference = 5E1540CE2F543F7D00F79BAD /* aiki-exam.app */;
@@ -201,6 +207,9 @@
 			);
 			mainGroup = 5E1540C52F543F7C00F79BAD;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				5EE931412FA78BE000D3C9D0 /* XCRemoteSwiftPackageReference "Yams" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 5E1540CF2F543F7D00F79BAD /* Products */;
 			projectDirPath = "";
@@ -219,6 +228,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				5E35E7AB2F564C3E0047ACD2 /* gong.caf in Resources */,
+				5EBE86722FA74769000E7854 /* defaults.yaml in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -593,6 +603,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		5EE931412FA78BE000D3C9D0 /* XCRemoteSwiftPackageReference "Yams" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/jpsim/Yams";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 6.2.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		5EE931422FA78BE000D3C9D0 /* Yams */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5EE931412FA78BE000D3C9D0 /* XCRemoteSwiftPackageReference "Yams" */;
+			productName = Yams;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 5E1540C62F543F7C00F79BAD /* Project object */;
 }

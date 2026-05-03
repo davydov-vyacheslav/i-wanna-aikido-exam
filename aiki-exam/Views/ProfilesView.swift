@@ -12,29 +12,51 @@ struct ProfilesView: View {
     @Query(
         filter: #Predicate<Profile> { $0.isPreset },
         sort: \Profile.createdAt) private var presets: [Profile]
-    @State private var pendingDelete: IndexSet?
+    @State private var pendingDelete: Profile?
     
     var body: some View {
         NavigationStack {
             List {
                 // Presents Profiles
-                Section(header: Text(".title.profiles.presets")) {
-                    ForEach(presets) { preset in
-                        NavigationLink(destination: ProfileDetailView(profile: preset)) {
-                            ProfileRow(profile: preset, isActive: preset.id == settings.activeProfileID)
+                if !presets.isEmpty {
+                    Section(header: Text(".title.profiles.presets")) {
+                        ForEach(presets) { preset in
+                            NavigationLink(destination: ProfileDetailView(profile: preset)) {
+                                ProfileRow(profile: preset, isActive: preset.id == settings.activeProfileID)
+                                    .swipeActions(edge: .trailing) {
+                                        if preset.id != settings.activeProfileID {
+                                            Button(role: .destructive) {
+                                                pendingDelete = preset
+                                            } label: {
+                                                Label(".button.common.delete", systemImage: "trash")
+                                            }
+                                        }
+                                    }
+                            }
                         }
                     }
                 }
-
+                
                 // User Profiles
                 Section(header: Text(".title.profiles.user")) {
                     ForEach(profiles) { profile in
                         NavigationLink(destination: ProfileDetailView(profile: profile)) {
                             ProfileRow(profile: profile, isActive: profile.id == settings.activeProfileID)
+                                .swipeActions(edge: .trailing) {
+                                    if profile.id != settings.activeProfileID {
+                                        Button(role: .destructive) {
+                                            pendingDelete = profile
+                                        } label: {
+                                            Label(".button.common.delete", systemImage: "trash")
+                                        }
+                                    }
+                                }
+
                         }
                     }
-                    .onDelete { offsets in pendingDelete = offsets }
                 }
+
+
             }
             .navigationTitle(".title.profiles")
             .navigationBarTitleDisplayMode(.inline)
@@ -51,22 +73,16 @@ struct ProfilesView: View {
             )) {
                 Button(".button.common.cancel", role: .cancel) { pendingDelete = nil }
                 Button(".button.common.delete", role: .destructive) {
-                    if let offsets = pendingDelete { deleteProfiles(at: offsets) }
+                    guard let profile = pendingDelete else { return }
+                    deleteProfile(p: profile)
                     pendingDelete = nil
                 }
             }
         }
     }
 
-    private func deleteProfiles(at offsets: IndexSet) {
-        for i in offsets {
-            let p = profiles[i]
-            if p.id == settings.activeProfileID {
-                settings.activeProfileID = profiles.first(where: { $0.id != p.id })?.id
-                    ?? settings.activeProfileID
-            }
-            ctx.delete(p)
-        }
+    private func deleteProfile(p: Profile) {
+        ctx.delete(p)
     }
 }
 

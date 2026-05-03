@@ -7,28 +7,29 @@
 
 import SwiftUI
 
-struct ChipPicker<Option: ChipOption>: View {
-    let all: [Option]
-    @Binding var selected: Set<Option>
+struct ChipPicker: View {
+    let items: [VocabularyItem]
+    @Binding var selectedKeys: Set<String>
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Button(".button.selectAll") { selected = Set(all) }
+                Button(".button.selectAll") { selectedKeys = Set(items.map(\.key)) }
                     .font(.caption)
                     .foregroundColor(.blue)
                     .buttonStyle(.borderless)
                 Text(".label.profile.select_buttons_separator").foregroundColor(.secondary)
-                Button(".button.deselectAll") { selected = [] }
+                Button(".button.deselectAll") { selectedKeys = [] }
                     .font(.caption)
                     .foregroundColor(.blue)
                     .buttonStyle(.borderless)
             }
             FlowLayout(spacing: 8) {
-                ForEach(all, id: \.self) { option in
-                    Chip(label: option.l10n, isSelected: selected.contains(option)) {
-                        if selected.contains(option) { selected.remove(option) }
-                        else { selected.insert(option) }
+                ForEach(items, id: \.id) { item in
+                    let selected = selectedKeys.contains(item.key)
+                    Chip(label: LocalizedStringKey(item.displayName), isSelected: selected) {
+                        if selected { selectedKeys.remove(item.key) }
+                        else        { selectedKeys.insert(item.key) }
                     }
                 }
             }
@@ -47,8 +48,8 @@ private struct Chip: View {
                 .font(.callout)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
-                .background(isSelected ? Color.green.opacity(0.7) : Color.secondary.opacity(0.5))
-                .foregroundColor(isSelected ? Color.primary : Color.primary)
+                .background(isSelected ? Color.green.opacity(0.7) : Color.secondary.opacity(0.25))
+                .foregroundColor(.primary)
                 .cornerRadius(20)
         }
         .animation(.spring(response: 0.2), value: isSelected)

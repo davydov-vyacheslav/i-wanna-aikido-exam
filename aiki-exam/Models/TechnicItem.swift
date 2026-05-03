@@ -10,5 +10,3 @@ struct TechnicItem: Codable, Hashable, Equatable, Identifiable {
     // Identifiable – stable synthetic id
     var id: String { "\(positionKey)|\(attackKey)|\(techniqueKey)" }
 }
-
-// TODO: extend me to return Master value (and cleanup in other places)

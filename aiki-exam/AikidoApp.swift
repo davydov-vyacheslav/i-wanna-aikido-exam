@@ -4,55 +4,34 @@ import SwiftData
 @main
 struct AikidoApp: App {
 
-    @StateObject private var settings = AppSettings.shared
-
-    private static let container: ModelContainer = {
-        let schema = Schema([Profile.self])
-        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-        do {
-            return try ModelContainer(for: schema, configurations: [config])
-        } catch {
-            fatalError("SwiftData container creation failed: \(error)") // TODO: user-fieldly message
-        }
+    let container: ModelContainer = {
+        let schema = Schema([Profile.self, VocabularyItem.self])
+        return try! ModelContainer(for: schema)
     }()
-    
-    var body: some Scene {
-        WindowGroup {
-            TabView {
-                ExamView()
-                    .tabItem {
-                        Label(".title.exam", systemImage: "figure.martial.arts")
-                    }
 
-                ProfilesView()
-                    .tabItem {
-                        Label(".title.profiles", systemImage: "list.bullet.rectangle.portrait")
-                    }
+    private var settings  = AppSettings.shared
+    @StateObject private var vocabStore: VocabularyStore
 
-                SettingsView()
-                    .tabItem {
-                        Label(".title.settings", systemImage: "gearshape")
-                    }
-            }
-            .environmentObject(settings)
-            .modelContainer(AikidoApp.container)
-            .task { await seedIfNeeded() }
-        }
+    init() {
+        // Build VocabStore with the container's main context.
+        let ctx = container.mainContext
+        let vs  = VocabularyStore(context: ctx)
+        _vocabStore = StateObject(wrappedValue: vs)
+
+        // Seed defaults on first launch (idempotent).
+        DefaultsLoader.seedPresets(into: ctx, settings: settings)
+        vs.refresh()
+
+        // Activate Watch connectivity.
+        // TODO: WatchBridge.shared.activate()
     }
 
-    // MARK: – First-launch seed
-
-    @MainActor
-    private func seedIfNeeded() async {
-        let ctx = AikidoApp.container.mainContext
-        let count = (try? ctx.fetchCount(FetchDescriptor<Profile>())) ?? 0
-        guard count == 0 else { return }
-
-        // FIXME: sync each time based on profile version
-        // Insert Aikikai as the default starter profile
-        Presets.all.forEach { profile in
-            ctx.insert(profile)
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+                .modelContainer(container)
+                .environmentObject(settings)
+                .environmentObject(vocabStore)
         }
-        settings.activeProfileID = Presets.aikikai.id
     }
 }

@@ -8,6 +8,13 @@ enum ExamMode: String, CaseIterable, Identifiable {
     case count = "count"
     case time  = "time"
     var id: String { rawValue }
+    
+    var label: LocalizedStringKey {
+        switch self {
+        case .count: return ".label.examMode.count"
+        case .time: return ".label.examMode.time"
+        }
+    }
 }
 
 private enum UDKey {
@@ -18,60 +25,30 @@ private enum UDKey {
     static let intervalSeconds  = "intervalSeconds"
     static let allowRepeat      = "allowRepeat"
     static let soundEnabled     = "soundEnabled"
+    static let ttsEnabled       = "ttsEnabled"
     static let activeProfileID  = "activeProfileID"
 }
 
 // MARK: – AppSettings
 
-/// Single source of truth for all user preferences.
-/// Persisted via UserDefaults so it survives relaunches without
-/// a SwiftData fetch. Active profile ID is joined to SwiftData at
-/// the Settings screen.
 final class AppSettings: ObservableObject {
 
     static let shared = AppSettings()
 
-    // MARK: – Published properties
-
-    @Published var randomize: Bool {
-        didSet { ud.set(randomize, forKey: UDKey.randomize) }
-    }
-
-    @Published var examMode: ExamMode {
-        didSet { ud.set(examMode.rawValue, forKey: UDKey.examMode) }
-    }
-
-    @Published var examCountTarget: Int {
-        didSet { ud.set(examCountTarget, forKey: UDKey.examCountTarget) }
-    }
-
-    @Published var examTimeMinutes: Int {
-        didSet { ud.set(examTimeMinutes, forKey: UDKey.examTimeMinutes) }
-    }
-
-    @Published var intervalSeconds: Int {
-        didSet { ud.set(intervalSeconds, forKey: UDKey.intervalSeconds) }
-    }
-
-    @Published var allowRepeat: Bool {
-        didSet { ud.set(allowRepeat, forKey: UDKey.allowRepeat) }
-    }
-
-    @Published var soundEnabled: Bool {
-        didSet { ud.set(soundEnabled, forKey: UDKey.soundEnabled) }
-    }
-
+    @Published var randomize: Bool       { didSet { ud.set(randomize,       forKey: UDKey.randomize) } }
+    @Published var examMode: ExamMode    { didSet { ud.set(examMode.rawValue, forKey: UDKey.examMode) } }
+    @Published var examCountTarget: Int  { didSet { ud.set(examCountTarget,  forKey: UDKey.examCountTarget) } }
+    @Published var examTimeMinutes: Int  { didSet { ud.set(examTimeMinutes,  forKey: UDKey.examTimeMinutes) } }
+    @Published var intervalSeconds: Int  { didSet { ud.set(intervalSeconds,  forKey: UDKey.intervalSeconds) } }
+    @Published var allowRepeat: Bool     { didSet { ud.set(allowRepeat,      forKey: UDKey.allowRepeat) } }
+    @Published var soundEnabled: Bool    { didSet { ud.set(soundEnabled,     forKey: UDKey.soundEnabled) } }
+    @Published var ttsEnabled: Bool      { didSet { ud.set(ttsEnabled,       forKey: UDKey.ttsEnabled) } }
     @Published var activeProfileID: UUID? {
         didSet { ud.set(activeProfileID?.uuidString, forKey: UDKey.activeProfileID) }
     }
 
-    // MARK: – Private storage
-
     private let ud: UserDefaults
 
-    // MARK: – Initialisers
-
-    /// Convenience singleton init – uses UserDefaults.standard.
     private convenience init() {
         self.init(userDefaults: .standard)
     }
@@ -80,26 +57,26 @@ final class AppSettings: ObservableObject {
     /// isolated suite without touching the real app's UserDefaults.
     init(
         userDefaults: UserDefaults,
-        allowRepeat: Bool    = true,
-        randomize: Bool      = false,
-        examMode: ExamMode   = .count,
-        examCountTarget: Int = 10,
-        examTimeMinutes: Int = 5,
-        intervalSeconds: Int = 30,
-        soundEnabled: Bool   = true,
-        activeProfileID: UUID? = nil
+        allowRepeat:      Bool     = true,
+        randomize:        Bool     = false,
+        examMode:         ExamMode = .count,
+        examCountTarget:  Int      = 10,
+        examTimeMinutes:  Int      = 5,
+        intervalSeconds:  Int      = 30,
+        soundEnabled:     Bool     = true,
+        ttsEnabled:       Bool     = true,
+        activeProfileID:  UUID?    = nil
     ) {
         self.ud = userDefaults
-
-        // Use persisted value if present, otherwise fall back to parameter default.
-        self.randomize        = userDefaults.bool(forKey: UDKey.randomize,       default: randomize)
-        self.examMode         = userDefaults.decoded(forKey: UDKey.examMode,      default: examMode)
-        self.examCountTarget  = userDefaults.int(forKey: UDKey.examCountTarget,   default: examCountTarget)
-        self.examTimeMinutes  = userDefaults.int(forKey: UDKey.examTimeMinutes,   default: examTimeMinutes)
-        self.intervalSeconds  = userDefaults.int(forKey: UDKey.intervalSeconds,   default: intervalSeconds)
-        self.allowRepeat      = userDefaults.bool(forKey: UDKey.allowRepeat,      default: allowRepeat)
-        self.soundEnabled     = userDefaults.bool(forKey: UDKey.soundEnabled,     default: soundEnabled)
-        self.activeProfileID  = userDefaults.uuid(forKey: UDKey.activeProfileID) ?? activeProfileID
+        self.randomize = userDefaults.bool(forKey: UDKey.randomize, default: randomize)
+        self.examMode = userDefaults.decoded(forKey: UDKey.examMode, default: examMode)
+        self.examCountTarget = userDefaults.int(forKey: UDKey.examCountTarget, default: examCountTarget)
+        self.examTimeMinutes = userDefaults.int(forKey: UDKey.examTimeMinutes, default: examTimeMinutes)
+        self.intervalSeconds = userDefaults.int(forKey: UDKey.intervalSeconds, default: intervalSeconds)
+        self.allowRepeat = userDefaults.bool(forKey: UDKey.allowRepeat, default: allowRepeat)
+        self.soundEnabled = userDefaults.bool(forKey: UDKey.soundEnabled, default: soundEnabled)
+        self.ttsEnabled = userDefaults.bool(forKey: UDKey.ttsEnabled, default: ttsEnabled)
+        self.activeProfileID = userDefaults.uuid(forKey: UDKey.activeProfileID) ?? activeProfileID
     }
 
     // MARK: – Feasibility

@@ -11,9 +11,10 @@ import SwiftData
 struct ProfileDetailView: View {
     @Bindable var profile: Profile
     @Environment(\.modelContext) private var ctx
+    @Environment(\.editMode)     private var editMode
+    @Environment(\.dismiss)      private var dismiss
     @EnvironmentObject private var settings: AppSettings
-    @Environment(\.editMode) private var editMode
-    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var vocabStore: VocabularyStore
     @State private var showBulkAdd = false
 
     var body: some View {
@@ -87,46 +88,44 @@ struct ProfileDetailView: View {
     }
 
     private var technicsSection: some View {
-        Section(header: Text(".title.profile.technics")) {
-            technicsList
+        let positions = vocabStore.positions.filter { pos in
+            profile.technics.contains { $0.positionKey == pos.key }
+        }
+
+        return ForEach(positions, id: \.key) { pos in
+            let technics = profile.technics.filter { $0.positionKey == pos.key }
+            Section(pos.displayName) {
+                ForEach(technics) { tc in
+                    HStack {
+                        Text(vocabStore.displayName(for: tc.attackKey, type: .attack))
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Text(vocabStore.displayName(for: tc.techniqueKey, type: .technique))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .font(.callout)
+                }
+                .onDelete(perform: profile.isPreset ? nil : { offsets in
+                    deleteTechnics(at: offsets, in: technics)
+                })
+            }
         }
     }
 
-    private var technicsList: some View {
-        ForEach(profile.technics) { tc in
-            TechnicRow(tc: tc)
-        }
-        .onDelete(perform: deleteTechnicsIfAllowed)
-        .onMove(perform: moveTechnicsIfAllowed)
+    private func deleteTechnics(at offsets: IndexSet, in group: [TechnicItem]) {
+        let idsToDelete = Set(offsets.map { group[$0].id })
+        profile.technics.removeAll { idsToDelete.contains($0.id) }
     }
 
-    private func deleteTechnicsIfAllowed(at offsets: IndexSet) {
-        guard !profile.isPreset else { return }
-        var t = profile.technics
-        t.remove(atOffsets: offsets)
-        profile.technics = t
-    }
-
-    private func moveTechnicsIfAllowed(from source: IndexSet, to destination: Int) {
+    private func moveTechnics(from source: IndexSet, to destination: Int) {
         guard !profile.isPreset else { return }
         var t = profile.technics
         t.move(fromOffsets: source, toOffset: destination)
         profile.technics = t
     }
 
-    // MARK: – Actions
-
     private func cloneAndDismiss() {
-        let cloned = profile.clone(name: String(localized: ".label.profile.copiedFrom \(profile.name)"))
-        ctx.insert(cloned)
-        dismiss()
-    }
-
-    private func deleteAndDismiss() {
-        if settings.activeProfileID == profile.id {
-            settings.activeProfileID = nil
-        }
-        ctx.delete(profile)
+        ctx.insert(profile.clone(name: String(localized: ".label.profile.copiedFrom \(profile.name)")))
         dismiss()
     }
 }
@@ -135,17 +134,18 @@ struct ProfileDetailView: View {
 
 struct TechnicRow: View {
     let tc: TechnicItem
+    let vocabStore: VocabularyStore
 
     var body: some View {
         HStack(spacing: 8) {
-            Text(MasterPositions.init(rawValue: tc.positionKey)!.l10n)
+            Text(vocabStore.displayName(for: tc.positionKey, type: .position))
                 .frame(width: 80, alignment: .leading)
                 .foregroundColor(.secondary)
                 .font(.callout)
-            Text(MasterAttacks.init(rawValue: tc.attackKey)!.l10n)
+            Text(vocabStore.displayName(for: tc.attackKey, type: .attack))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .font(.callout)
-            Text(MasterTechnics.init(rawValue: tc.techniqueKey)!.l10n)
+            Text(vocabStore.displayName(for: tc.techniqueKey, type: .technique))
                 .frame(maxWidth: .infinity, alignment: .trailing)
                 .foregroundColor(.red)
                 .font(.callout)

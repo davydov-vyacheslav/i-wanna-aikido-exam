@@ -4,7 +4,7 @@ import AVFoundation
 
 // MARK: – Exam state machine
 
-enum ExamState: Equatable {
+enum ExamState: String, Equatable {
     case idle       // before first Start
     case running
     case paused
@@ -16,8 +16,6 @@ enum ExamState: Equatable {
 @MainActor
 final class ExamViewModel: ObservableObject {
 
-    // ── Published state ───────────────────────────────────
-
     @Published private(set) var state: ExamState = .idle
     @Published private(set) var currentTechnic: TechnicItem?
     @Published private(set) var doneCount:    Int = 0
@@ -25,10 +23,11 @@ final class ExamViewModel: ObservableObject {
     @Published private(set) var timerProgress: Double = 1.0   // 1 → 0 within each interval
     @Published private(set) var examElapsed:  Int = 0         // seconds (time mode)
 
-    // ── Dependencies (injected) ───────────────────────────
-
     private let settings: AppSettings
     private var profile: Profile?
+
+    /// Set by ExamView to resolve vocab keys → display strings for TTS.
+    var nameResolver: ((String, VocabularyType) -> String)?
 
     // ── Internal ──────────────────────────────────────────
 
@@ -44,6 +43,7 @@ final class ExamViewModel: ObservableObject {
     private var examClockTimer: Timer?
     private var progressStep: Int = 0   // counts down from totalSteps
     private var audioPlayer: AVAudioPlayer?
+    private let synthesizer = AVSpeechSynthesizer()
 
     // ── Init ──────────────────────────────────────────────
 
@@ -70,16 +70,22 @@ final class ExamViewModel: ObservableObject {
             }
             if currentTechnic == nil {
                 currentTechnic = dequeueNext()
+                speakCurrent()   // announce first technique
             }
+        } else {
+            resumeAudio()
         }
         state = .running
         startTimers()
+        notifyWatch()
     }
 
     func pause() {
         guard state == .running else { return }
         state = .paused
         stopTimers()
+        pauseAudio()
+        notifyWatch()
     }
 
     /// Skips the current technique:
@@ -102,11 +108,13 @@ final class ExamViewModel: ObservableObject {
         }
 
         restartTechniqueTimer()
+        notifyWatch()
     }
     
     /// Forces an immediate finish regardless of exam mode / progress.
     func forceFinish() {
         guard state == .running || state == .paused else { return }
+        stopAudio()
         finish()
     }
 
@@ -120,27 +128,18 @@ final class ExamViewModel: ObservableObject {
         examElapsed     = 0
         usedIDs         = []
         orderedQueue    = []
+        notifyWatch()
     }
 
     // MARK: – Computed helpers
 
     var canSkipNow: Bool {
         guard state == .running, let current = currentTechnic else { return false }
-
-        if settings.allowRepeat && !settings.randomize {
-            // Queue must have at least one other item waiting
-            return !orderedQueue.isEmpty
-        }
-
-        let poolAfterSkip = availablePool(excluding: current)
-        guard !poolAfterSkip.isEmpty else { return false }
-
-        // Time mode + no-repeat: ensure enough unique techniques cover remaining time
+        if settings.allowRepeat && !settings.randomize { return !orderedQueue.isEmpty }
+        let pool = availablePool(excluding: current)
+        guard !pool.isEmpty else { return false }
         if settings.examMode == .time, !settings.allowRepeat {
-            return settings.canSkip(
-                remainingSeconds: remainingExamSeconds,
-                poolSizeAfterSkip: poolAfterSkip.count
-            )
+            return settings.canSkip(remainingSeconds: remainingExamSeconds, poolSizeAfterSkip: pool.count)
         }
         return true
     }
@@ -157,14 +156,8 @@ final class ExamViewModel: ObservableObject {
         }
     }
 
-    var remainingExamSeconds: Int {
-        max(0, settings.examTimeMinutes * 60 - examElapsed)
-    }
-
-    var isFeasible: Bool {
-        guard let profile else { return false }
-        return settings.canStart(profile: profile)
-    }
+    var remainingExamSeconds: Int { max(0, settings.examTimeMinutes * 60 - examElapsed) }
+    var isFeasible: Bool { guard let p = profile else { return false }; return settings.canStart(profile: p) }
 
     // MARK: – Timer management
 
@@ -230,8 +223,7 @@ final class ExamViewModel: ObservableObject {
         // Mark current as done
         if let current = currentTechnic {
             doneCount += 1
-            playSound()
-
+            playGong()
             if settings.allowRepeat && !settings.randomize {
                 // Cycle: append done item back to end of queue
                 orderedQueue.append(current)
@@ -252,7 +244,9 @@ final class ExamViewModel: ObservableObject {
             finish(); return          // pool exhausted in no-repeat mode
         }
         currentTechnic = next
+        speakCurrent()       // TTS after gong
         restartProgressBar()
+        notifyWatch()
     }
 
     private func restartProgressBar() {
@@ -309,7 +303,7 @@ final class ExamViewModel: ObservableObject {
         return base
     }
 
-    // MARK: – Sound
+    // MARK: – Gong sound
 
     private func configureAudioSession() {
         let session = AVAudioSession.sharedInstance()
@@ -317,23 +311,60 @@ final class ExamViewModel: ObservableObject {
         try? session.setActive(true)
     }
 
-    private func playSound() {
+    private func playGong() {
         guard settings.soundEnabled else { return }
-
-        guard let url = Bundle.main.url(forResource: "gong", withExtension: "caf") else {
-            AudioServicesPlaySystemSound(1304)
-            return
-        }
-
-        configureAudioSession()
-
-        do {
-            audioPlayer = try AVAudioPlayer(contentsOf: url)
+        if let url = Bundle.main.url(forResource: "gong", withExtension: "caf") {
+            configureAudioSession()
+            audioPlayer = try? AVAudioPlayer(contentsOf: url)
             audioPlayer?.volume = 1.0
-            audioPlayer?.prepareToPlay()
             audioPlayer?.play()
-        } catch {
-            assertionFailure("AVAudioPlayer error: \(error)")
+        } else {
+            AudioServicesPlaySystemSound(1304)
         }
+    }
+
+    // MARK: – TTS
+
+    private func speakCurrent() {
+        guard settings.ttsEnabled, let technic = currentTechnic, let resolve = nameResolver else { return }
+        synthesizer.stopSpeaking(at: .immediate)
+        let text = [
+            resolve(technic.positionKey, .position),
+            resolve(technic.attackKey,   .attack),
+            resolve(technic.techniqueKey, .technique)
+        ].joined(separator: ". ")
+        let delay = audioPlayer?.duration ?? 0.2
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            self?.speak(text: text)
+        }
+    }
+    
+    func speak(text: String) {
+        synthesizer.stopSpeaking(at: .immediate)
+        let utterance = AVSpeechUtterance(string: text)
+        utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.85
+        utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
+        synthesizer.speak(utterance)
+    }
+
+    private func stopAudio() {
+        audioPlayer?.stop()
+        synthesizer.stopSpeaking(at: .immediate)
+    }
+
+    private func pauseAudio() {
+        audioPlayer?.pause()
+        synthesizer.pauseSpeaking(at: .immediate)
+    }
+
+    private func resumeAudio() {
+        audioPlayer?.play()
+        synthesizer.continueSpeaking()
+    }
+
+    // MARK: – Watch sync
+
+    private func notifyWatch() {
+        // TODO: WatchBridge.shared.send(state: state, technic: currentTechnic, nameResolver: nameResolver)
     }
 }

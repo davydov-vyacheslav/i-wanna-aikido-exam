@@ -10,24 +10,27 @@ import SwiftData
 
 struct ProfileWizardView: View {
     var targetProfile: Profile? = nil
+
+    @EnvironmentObject private var vocabStore: VocabularyStore
     @Environment(\.modelContext) private var ctx
     @Environment(\.dismiss) private var dismiss
 
     @State private var name = ""
-    @State private var selPositions:  Set<MasterPositions> = []
-    @State private var selAttacks:    Set<MasterAttacks> = []
-    @State private var selTechniques: Set<MasterTechnics> = []
+    @State private var selPositions: Set<String> = []
+    @State private var selAttacks: Set<String> = []
+    @State private var selTechniques: Set<String> = []
 
     private var isAddMode: Bool { targetProfile != nil }
     
     private var newCombos: Int {
-        let existingKeys: Set<String> = isAddMode
-            ? Set(targetProfile!.technics.map { "\($0.positionKey)|\($0.attackKey)|\($0.techniqueKey)" })
+        let existingIDs: Set<String> = isAddMode
+            ? Set(targetProfile!.technics.map(\.id))
             : []
         var count = 0
         for p in selPositions {
             for a in selAttacks {
-                for t in selTechniques where !existingKeys.contains("\(p.rawValue)|\(a.rawValue)|\(t.rawValue)") {
+                for t in selTechniques where
+                    !existingIDs.contains("\(p)|\(a)|\(t)") {
                     count += 1
                 }
             }
@@ -48,13 +51,13 @@ struct ProfileWizardView: View {
                 }
             }
             Section(".title.profile.creation.positions") {
-                ChipPicker(all: Array(MasterPositions.allCases), selected: $selPositions)
+                ChipPicker(items: vocabStore.positions, selectedKeys: $selPositions)
             }
             Section(".title.profile.creation.attacks") {
-                ChipPicker(all: Array(MasterAttacks.allCases), selected: $selAttacks)
+                ChipPicker(items: vocabStore.attacks, selectedKeys: $selAttacks)
             }
             Section(".title.profile.creation.techniques") {
-                ChipPicker(all: Array(MasterTechnics.allCases), selected: $selTechniques)
+                ChipPicker(items: vocabStore.techniques, selectedKeys: $selTechniques)
             }
             Section(".title.profile.creation.summary") {
                 Text(
@@ -73,7 +76,7 @@ struct ProfileWizardView: View {
                     .frame(maxWidth: .infinity)
 
                 Button(isAddMode
-                       ? ".button.profile.creation.add"
+                       ? ".button.common.add"
                        : ".button.profile.creation.create", action: confirm)
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
@@ -100,8 +103,8 @@ struct ProfileWizardView: View {
     private func confirm() {
         let items = buildItems()
         if let profile = targetProfile {
-            let existingKeys = Set(profile.technics.map { "\($0.positionKey)|\($0.attackKey)|\($0.techniqueKey)" })
-            let toAdd = items.filter { !existingKeys.contains("\($0.positionKey)|\($0.attackKey)|\($0.techniqueKey)") }
+            let existing = Set(profile.technics.map(\.id))
+            let toAdd = items.filter { !existing.contains($0.id) }
             profile.technics.append(contentsOf: toAdd)
         } else {
             ctx.insert(Profile(name: name, technics: items, isPreset: false))
@@ -110,44 +113,15 @@ struct ProfileWizardView: View {
     }
 
     private func buildItems() -> [TechnicItem] {
-        var items: [TechnicItem] = []
+        var result: [TechnicItem] = []
         for p in selPositions {
             for a in selAttacks {
                 for t in selTechniques {
-                    items.append(TechnicItem(positionKey: p.rawValue, attackKey: a.rawValue, techniqueKey: t.rawValue))
+                    result.append(TechnicItem(positionKey: p, attackKey: a, techniqueKey: t))
                 }
             }
         }
-        return items
-    }
-
-    private func create() {
-        let profile = fromCartesian(
-            name: name,
-            positions:  Array(selPositions),
-            attacks:    Array(selAttacks),
-            techniques: Array(selTechniques)
-        )
-        ctx.insert(profile)
-        dismiss()
-    }
-    
-    /// Build a profile from Cartesian product of key-lists.
-    func fromCartesian(
-        name: String,
-        positions: [MasterPositions],
-        attacks: [MasterAttacks],
-        techniques: [MasterTechnics]
-    ) -> Profile {
-        var items: [TechnicItem] = []
-        for p in positions {
-            for a in attacks {
-                for t in techniques {
-                    items.append(TechnicItem(positionKey: p.rawValue, attackKey: a.rawValue, techniqueKey: t.rawValue))
-                }
-            }
-        }
-        return Profile(name: name, technics: items, isPreset: false)
+        return result
     }
 }
 

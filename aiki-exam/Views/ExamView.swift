@@ -4,6 +4,7 @@ import SwiftData
 struct ExamView: View {
 
     @EnvironmentObject private var settings: AppSettings
+    @EnvironmentObject private var vocabStore: VocabularyStore
     @StateObject private var vm = ExamViewModel(settings: .shared)
     @Query private var profiles: [Profile]
 
@@ -14,103 +15,48 @@ struct ExamView: View {
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
-                // Exam status strip
-                HStack {
-                    // Profile name
-                    if let profile = activeProfile {
-                        Label(profile.name, systemImage: "person.crop.rectangle")
-                            .font(.footnote)
-                            .foregroundColor(.secondary)
-                    }
-                    Spacer()
-                    // State indicator
-                    Circle()
-                        .fill(vm.state.color)
-                        .frame(width: 8, height: 8)
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
-
-                // Feasibility warning
+                statusStrip
                 if let profile = activeProfile, let reason = settings.cantStartReason(profile: profile) {
                     warnBanner(reason: reason)
                 }
-
-                // Progress bar (exam-level)
-                if vm.state != .idle {
-                    examProgressBar
-                        .padding(.horizontal, 20)
-                        .padding(.top, 8)
-                }
+                if vm.state != .idle { examProgressBar.padding(.horizontal, 20).padding(.top, 8) }
 
                 Spacer()
-
-                // Technique cards or idle placeholder
-                Group {
-                    if let t = vm.currentTechnic {
-                        VStack(spacing: 12) {
-                            TechCard(value: MasterPositions(rawValue: t.positionKey)!.l10n)
-                            TechCard(value: MasterAttacks(rawValue: t.attackKey)!.l10n)
-                            TechCard(value: MasterTechnics(rawValue: t.techniqueKey)!.l10n)
-                        }
-
-                    } else {
-                        Text(".label.exam.aiki")
-                            .font(.system(size: 80, design: .serif))
-                            .opacity(0.12)
-                    }
-                }
-                .padding(.horizontal, 20)
-
+                techniqueDisplay.padding(.horizontal, 20)
                 Spacer()
 
-                // Timer bar (inter-technique)
                 if vm.state == .running {
-                    timerBar
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 6)
+                    timerBar.padding(.horizontal, 20).padding(.bottom, 6)
                 }
-
-                // Controls
-                switch vm.state {
-                case .running:
-                    HStack(spacing: 12) {
-                        ExamButton(icon: "pause.fill", label: ".button.exam.pause", enabled: true) { vm.pause() }
-                        ExamButton(icon: "forward.end.fill", label: ".button.exam.skip", enabled: vm.canSkipNow) { vm.skip() }
-                    }
-                case .paused:
-                    VStack(spacing: 8) {
-                        ExamButton(icon: "play.fill", label: ".button.exam.continue", enabled: true) { vm.start() }
-                        Button(role: .destructive) { vm.forceFinish() } label: {
-                            Label(".button.exam.finish", systemImage: "stop.fill")
-                                .font(.callout)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 10)
-                        }
-                        .tint(.orange)
-                    }
-                case .idle:
-                    ExamButton(icon: "play.fill", label: ".button.exam.start", enabled: vm.isFeasible) { vm.start() }
-                case .finished:
-                    EmptyView()   // handled by finishOverlay
-                }
+                controls
             }
-
-            // Finish overlay
-            if vm.state == .finished {
-                finishOverlay
-            }
+            if vm.state == .finished { finishOverlay }
         }
         .navigationBarHidden(true)
-        .onChange(of: settings.activeProfileID) { _, _ in
-            vm.bind(profile: activeProfile)
-        }
-        .onAppear {
-            vm.bind(profile: activeProfile)
-        }
+        .onChange(of: settings.activeProfileID) { _, _ in rebind() }
+        .onAppear { rebind() }
+    }
+
+    // MARK: – Bind / resolver
+
+    private func rebind() {
+        vm.nameResolver = { [vocabStore] key, type in vocabStore.displayName(for: key, type: type) }
+        vm.bind(profile: activeProfile)
     }
 
     // MARK: – Sub-views
+
+    private var statusStrip: some View {
+        HStack {
+            if let profile = activeProfile {
+                Label(profile.name, systemImage: "person.crop.rectangle")
+                    .font(.footnote).foregroundColor(.secondary)
+            }
+            Spacer()
+            Circle().fill(vm.state.color).frame(width: 8, height: 8)
+        }
+        .padding(.horizontal, 20).padding(.top, 8)
+    }
 
     private func warnBanner(reason: LocalizedStringKey) -> some View {
         HStack(spacing: 8) {
@@ -123,6 +69,20 @@ struct ExamView: View {
         .cornerRadius(10)
         .padding(.horizontal, 20)
         .padding(.top, 6)
+    }
+
+    @ViewBuilder
+    private var techniqueDisplay: some View {
+        if let t = vm.currentTechnic {
+            VStack(spacing: 12) {
+                TechCard(value: vocabStore.displayName(for: t.positionKey,  type: .position))
+                TechCard(value: vocabStore.displayName(for: t.attackKey,    type: .attack))
+                TechCard(value: vocabStore.displayName(for: t.techniqueKey, type: .technique))
+            }
+        } else {
+            Text(".label.exam.aiki")
+                .font(.system(size: 80, design: .serif)).opacity(0.12)
+        }
     }
 
     private var examProgressBar: some View {
@@ -189,7 +149,29 @@ struct ExamView: View {
         }
     }
 
-    // MARK: – Finish overlay
+    @ViewBuilder
+    private var controls: some View {
+        switch vm.state {
+        case .running:
+            HStack(spacing: 12) {
+                ExamButton(icon: "pause.fill",      label: ".button.exam.pause",  enabled: true)           { vm.pause() }
+                ExamButton(icon: "forward.end.fill", label: ".button.exam.skip", enabled: vm.canSkipNow)  { vm.skip() }
+            }
+        case .paused:
+            VStack(spacing: 8) {
+                ExamButton(icon: "play.fill", label: ".button.exam.continue", enabled: true) { vm.start() }
+                Button(role: .destructive) { vm.forceFinish() } label: {
+                    Label(".button.exam.finish", systemImage: "stop.fill")
+                        .font(.callout).frame(maxWidth: .infinity).padding(.vertical, 10)
+                }
+                .tint(.orange)
+            }
+        case .idle:
+            ExamButton(icon: "play.fill", label: ".button.exam.start", enabled: vm.isFeasible) { vm.start() }
+        case .finished:
+            EmptyView()
+        }
+    }
 
     private var finishOverlay: some View {
         ZStack {
@@ -215,8 +197,7 @@ struct ExamView: View {
 // MARK: – TechCard
 
 private struct TechCard: View {
-    let value: LocalizedStringKey
-
+    let value: String
     var body: some View {
         Text(value)
             .font(.largeTitle)

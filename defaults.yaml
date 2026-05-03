@@ -1,0 +1,149 @@
+# Aikido default vocabulary and preset profiles.
+# Source: Aikikai Foundation Hombu Dojo Grading Examination System
+#         https://aikikai.or.jp/eng/hombudojo/grading/
+#
+
+vocab:
+  positions:
+    - key: tachi_waza
+      name: "Tachi Waza"
+    - key: suwari_waza
+      name: "Suwari Waza"
+    - key: hanmi_handachi
+      name: "Hanmi Handachi"
+
+  attacks:
+    - key: shomen_uchi
+      name: "Shomen Uchi"
+    - key: yokomen_uchi
+      name: "Yokomen Uchi"
+    - key: tsuki
+      name: "Tsuki"
+    - key: katate_dori
+      name: "Katate Dori"
+    - key: kata_dori
+      name: "Kata Dori"
+    - key: kata_dori_menuchi
+      name: "Kata Dori Men Uchi"
+    - key: ryote_dori
+      name: "Ryote Dori"
+    - key: morote_dori
+      name: "Morote Dori"
+    - key: ushiro_ryote_dori
+      name: "Ushiro Ryote Dori"
+    - key: ushiro_ryokata_dori
+      name: "Ushiro Ryokata Dori"
+    - key: ushiro_kubishime
+      name: "Ushiro Kubishime"
+
+  techniques:
+    - key: ikkyo
+      name: "Ikkyo"
+    - key: nikyo
+      name: "Nikyo"
+    - key: sankyo
+      name: "Sankyo"
+    - key: yonkyo
+      name: "Yonkyo"
+    - key: gokyo
+      name: "Gokyo"
+    - key: irimi_nage
+      name: "Irimi Nage"
+    - key: tenchi_nage
+      name: "Tenchi Nage"
+    - key: kote_gaeshi
+      name: "Kote Gaeshi"
+    - key: shiho_nage
+      name: "Shiho Nage"
+    - key: kaiten_nage
+      name: "Kaiten Nage"
+    - key: juji_nage
+      name: "Juji Nage"
+    - key: koshi_nage
+      name: "Koshi Nage"
+    - key: kokyu_ho
+      name: "Kokyu Ho"
+    - key: kokyu_nage
+      name: "Kokyu Nage"
+
+
+# ── Presets ────────────────────────────────────────────────────────────────────
+# Each combo: [position_key, attack_key, technique_key]
+# Sorted: suwari_waza → hanmi_handachi → tachi_waza;
+#         within each block: attack key asc, then technique key asc.
+
+presets:
+  # ── Shodan ──────────────────────────────────────────────────────────────────
+  # Full unarmed curriculum: all positions, all standard attack/technique pairs
+  # (sitting, sitting vs. standing, standing; strikes, thrusts, all grabs incl. rear)
+  - name: "Aikikai Foundation Hombu Dojo"
+    combos:
+      - [suwari_waza,    kata_dori,           ikkyo]
+      - [suwari_waza,    kata_dori,           nikyo]
+      - [suwari_waza,    kata_dori,           sankyo]
+      - [suwari_waza,    shomen_uchi,         ikkyo]
+      - [suwari_waza,    shomen_uchi,         irimi_nage]
+      - [suwari_waza,    shomen_uchi,         kokyu_ho]
+      - [suwari_waza,    shomen_uchi,         nikyo]
+      - [suwari_waza,    shomen_uchi,         sankyo]
+      - [suwari_waza,    yokomen_uchi,        ikkyo]
+      - [suwari_waza,    yokomen_uchi,        nikyo]
+      - [hanmi_handachi, katate_dori,         ikkyo]
+      - [hanmi_handachi, katate_dori,         kaiten_nage]
+      - [hanmi_handachi, katate_dori,         nikyo]
+      - [hanmi_handachi, katate_dori,         sankyo]
+      - [hanmi_handachi, katate_dori,         shiho_nage]
+      - [hanmi_handachi, ryote_dori,          shiho_nage]
+      - [hanmi_handachi, ushiro_ryote_dori,   ikkyo]
+      - [hanmi_handachi, ushiro_ryote_dori,   irimi_nage]
+      - [hanmi_handachi, ushiro_ryote_dori,   kote_gaeshi]
+      - [tachi_waza,     kata_dori,           ikkyo]
+      - [tachi_waza,     kata_dori,           nikyo]
+      - [tachi_waza,     kata_dori,           sankyo]
+      - [tachi_waza,     kata_dori_menuchi,   ikkyo]
+      - [tachi_waza,     kata_dori_menuchi,   irimi_nage]
+      - [tachi_waza,     kata_dori_menuchi,   nikyo]
+      - [tachi_waza,     kata_dori_menuchi,   sankyo]
+      - [tachi_waza,     kata_dori_menuchi,   shiho_nage]
+      - [tachi_waza,     katate_dori,         irimi_nage]
+      - [tachi_waza,     katate_dori,         kaiten_nage]
+      - [tachi_waza,     katate_dori,         kote_gaeshi]
+      - [tachi_waza,     katate_dori,         nikyo]
+      - [tachi_waza,     katate_dori,         shiho_nage]
+      - [tachi_waza,     morote_dori,         ikkyo]
+      - [tachi_waza,     morote_dori,         irimi_nage]
+      - [tachi_waza,     morote_dori,         nikyo]
+      - [tachi_waza,     morote_dori,         tenchi_nage]
+      - [tachi_waza,     ryote_dori,          ikkyo]
+      - [tachi_waza,     ryote_dori,          kaiten_nage]
+      - [tachi_waza,     ryote_dori,          kote_gaeshi]
+      - [tachi_waza,     ryote_dori,          shiho_nage]
+      - [tachi_waza,     ryote_dori,          tenchi_nage]
+      - [tachi_waza,     shomen_uchi,         ikkyo]
+      - [tachi_waza,     shomen_uchi,         irimi_nage]
+      - [tachi_waza,     shomen_uchi,         kokyu_ho]
+      - [tachi_waza,     shomen_uchi,         nikyo]
+      - [tachi_waza,     shomen_uchi,         sankyo]
+      - [tachi_waza,     shomen_uchi,         shiho_nage]
+      - [tachi_waza,     tsuki,               irimi_nage]
+      - [tachi_waza,     tsuki,               kote_gaeshi]
+      - [tachi_waza,     tsuki,               sankyo]
+      - [tachi_waza,     tsuki,               yonkyo]
+      - [tachi_waza,     ushiro_kubishime,    ikkyo]
+      - [tachi_waza,     ushiro_kubishime,    kote_gaeshi]
+      - [tachi_waza,     ushiro_kubishime,    sankyo]
+      - [tachi_waza,     ushiro_ryokata_dori, ikkyo]
+      - [tachi_waza,     ushiro_ryokata_dori, kote_gaeshi]
+      - [tachi_waza,     ushiro_ryokata_dori, sankyo]
+      - [tachi_waza,     ushiro_ryote_dori,   ikkyo]
+      - [tachi_waza,     ushiro_ryote_dori,   irimi_nage]
+      - [tachi_waza,     ushiro_ryote_dori,   kote_gaeshi]
+      - [tachi_waza,     ushiro_ryote_dori,   nikyo]
+      - [tachi_waza,     ushiro_ryote_dori,   sankyo]
+      - [tachi_waza,     yokomen_uchi,        gokyo]
+      - [tachi_waza,     yokomen_uchi,        ikkyo]
+      - [tachi_waza,     yokomen_uchi,        irimi_nage]
+      - [tachi_waza,     yokomen_uchi,        kaiten_nage]
+      - [tachi_waza,     yokomen_uchi,        kote_gaeshi]
+      - [tachi_waza,     yokomen_uchi,        nikyo]
+      - [tachi_waza,     yokomen_uchi,        shiho_nage]
