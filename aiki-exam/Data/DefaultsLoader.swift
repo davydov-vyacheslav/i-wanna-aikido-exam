@@ -16,7 +16,7 @@ enum DefaultsLoader {
         // insert vocabulary data
         func insertVocabulary(_ entries: [YAMLVocabEntry], type: VocabularyType) {
             for (_, e) in entries.enumerated() {
-                ctx.insert(VocabularyItem(key: e.key, type: type, displayName: e.name))
+                ctx.insert(VocabularyItem(key: e.key, type: type, displayName: e.name, pronunciation: e.pronunciation))
             }
         }
         insertVocabulary(doc.vocab.positions,  type: .position)
@@ -76,7 +76,7 @@ struct YAMLDocument {
         guard let arr = value as? [[String: String]] else { return [] }
         return arr.compactMap { dict in
             guard let key = dict["key"], let name = dict["name"] else { return nil }
-            return YAMLVocabEntry(key: key, name: name)
+            return YAMLVocabEntry(key: key, name: name, pronunciation: dict["pronunciation"])
         }
     }
 }
@@ -87,7 +87,7 @@ struct YAMLVocabSection {
     var techniques: [YAMLVocabEntry] = []
 }
 
-struct YAMLVocabEntry { let key, name: String }
+struct YAMLVocabEntry { let key, name: String; let pronunciation: String? }
 
 struct YAMLCombo { let position, attack, technique: String }
 

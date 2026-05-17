@@ -11,7 +11,7 @@ struct ContentView: View {
     var body: some View {
         TabView {
             ExamView()
-                .tabItem { Label(".title.exam", systemImage: "bell.fill") }
+                .tabItem { Label(".title.exam", systemImage: "figure.martial.arts") }
 
             ProfilesView()
                 .tabItem { Label(".title.profiles", systemImage: "person.2.fill") }

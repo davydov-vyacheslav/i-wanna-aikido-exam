@@ -25,30 +25,30 @@ final class ExamViewModel: ObservableObject {
 
     private let settings: AppSettings
     private var profile: Profile?
+    private var queue: ExamQueue?
+    private let audio = ExamAudio.shared
+    private let timers = ExamTimers()
 
     /// Set by ExamView to resolve vocab keys → display strings for TTS.
     var nameResolver: ((String, VocabularyType) -> String)?
-
-    // ── Internal ──────────────────────────────────────────
-
-    /// IDs excluded from pool: completed + skipped (used when allowRepeat = false).
-    private var usedIDs: Set<String> = []
-    
-    /// Ordered queue used when allowRepeat = true && randomize = false.
-    /// Completed and skipped items are appended to the end.
-    private var orderedQueue: [TechnicItem] = []
-
-    private var techniqueTimer: Timer?
-    private var progressTimer: Timer?
-    private var examClockTimer: Timer?
-    private var progressStep: Int = 0   // counts down from totalSteps
-    private var audioPlayer: AVAudioPlayer?
-    private let synthesizer = AVSpeechSynthesizer()
+    var speechTextResolver: ((String, VocabularyType) -> String)?
 
     // ── Init ──────────────────────────────────────────────
 
     init(settings: AppSettings) {
         self.settings = settings
+        setupTimers()
+    }
+
+    private func setupTimers() {
+        timers.onAdvance  = { [weak self] in self?.advanceTechnique() }
+        timers.onProgress = { [weak self] v in self?.timerProgress = v }
+        timers.onExamTick = { [weak self] in
+            guard let self, self.state == .running else { return }
+            self.examElapsed += 1
+            if self.examElapsed >= self.settings.examTimeMinutes * 60 { self.finish() }
+        }
+        syncVoice()
     }
 
     // MARK: – Public interface
@@ -65,26 +65,36 @@ final class ExamViewModel: ObservableObject {
         guard state != .running, let profile, settings.canStart(profile: profile) else { return }
         if state == .idle {
             // Initialise queue / pool for the new exam run
-            if settings.allowRepeat && !settings.randomize {
-                orderedQueue = Array(profile.technics)
-            }
+            queue = ExamQueue(profile: profile, settings: settings)
             if currentTechnic == nil {
-                currentTechnic = dequeueNext()
-                speakCurrent()   // announce first technique
+                currentTechnic = queue?.dequeueNext()
             }
-        } else {
-            resumeAudio()
+            audio.playGong(enabled: settings.soundEnabled)
+            speakCurrent()   // announce first technique
+            timers.startAll(
+                intervalSeconds: settings.intervalSeconds,
+                includeExamClock: settings.examMode == .time
+            )
         }
+        
+        if state == .paused {
+            audio.resume()
+            timers.resumeTimers(
+                intervalSeconds: settings.intervalSeconds,
+                includeExamClock: settings.examMode == .time
+            )
+        }
+
         state = .running
-        startTimers()
+        syncVoice()
         notifyWatch()
     }
 
     func pause() {
         guard state == .running else { return }
         state = .paused
-        stopTimers()
-        pauseAudio()
+        timers.stop()
+        audio.pause()
         notifyWatch()
     }
 
@@ -93,41 +103,44 @@ final class ExamViewModel: ObservableObject {
     /// - allowRepeat=true, randomize=false → deferred to end of ordered queue.
     /// - allowRepeat=true, randomize=true  → excluded only from the immediate next pick.
     func skip() {
-        guard state == .running, canSkipNow, let current = currentTechnic else { return }
+        guard state == .running,
+              let current = currentTechnic,
+              queue?.canSkip(current: current, remainingExamSeconds: remainingExamSeconds) == true
+        else { return }
         skippedCount += 1
-
-        if settings.allowRepeat && !settings.randomize {
-            orderedQueue.append(current)          // defer to end of queue
-            currentTechnic = orderedQueue.isEmpty ? nil : orderedQueue.removeFirst()
-        } else if !settings.allowRepeat {
-            usedIDs.insert(current.id)            // permanently remove from pool
-            currentTechnic = dequeueNext(excluding: current)
-        } else {
-            // allowRepeat=true, randomize=true: just pick a different random
-            currentTechnic = dequeueNext(excluding: current)
-        }
-
-        restartTechniqueTimer()
+        queue?.markSkipped(current)
+        currentTechnic = queue?.dequeueNext(excluding: current)
+        audio.playGong(enabled: settings.soundEnabled)
+        speakCurrent()
+        timers.restartInterval(intervalSeconds: settings.intervalSeconds)
         notifyWatch()
     }
     
     /// Forces an immediate finish regardless of exam mode / progress.
     func forceFinish() {
         guard state == .running || state == .paused else { return }
-        stopAudio()
+        audio.stop()
         finish()
     }
 
     func reset() {
-        stopTimers()
+        timers.stop()
+        audio.stop()
+        audio.deactivateSession()
         state           = .idle
         currentTechnic  = nil
         doneCount       = 0
         skippedCount    = 0
         timerProgress   = 1.0
         examElapsed     = 0
-        usedIDs         = []
-        orderedQueue    = []
+        queue           = nil
+        notifyWatch()
+    }
+    
+    private func finish() {
+        timers.stop()
+        audio.deactivateSession()
+        state = .finished
         notifyWatch()
     }
 
@@ -135,13 +148,7 @@ final class ExamViewModel: ObservableObject {
 
     var canSkipNow: Bool {
         guard state == .running, let current = currentTechnic else { return false }
-        if settings.allowRepeat && !settings.randomize { return !orderedQueue.isEmpty }
-        let pool = availablePool(excluding: current)
-        guard !pool.isEmpty else { return false }
-        if settings.examMode == .time, !settings.allowRepeat {
-            return settings.canSkip(remainingSeconds: remainingExamSeconds, poolSizeAfterSkip: pool.count)
-        }
-        return true
+        return queue?.canSkip(current: current, remainingExamSeconds: remainingExamSeconds) ?? false
     }
 
     var examProgress: Double {
@@ -157,63 +164,7 @@ final class ExamViewModel: ObservableObject {
     }
 
     var remainingExamSeconds: Int { max(0, settings.examTimeMinutes * 60 - examElapsed) }
-    var isFeasible: Bool { guard let p = profile else { return false }; return settings.canStart(profile: p) }
-
-    // MARK: – Timer management
-
-    private func startTimers() {
-        startProgressTimer()
-        startTechniqueTimer()
-        if settings.examMode == .time {
-            startExamClock()
-        }
-    }
-
-    private func stopTimers() {
-        techniqueTimer?.invalidate();  techniqueTimer = nil
-        progressTimer?.invalidate();  progressTimer = nil
-        examClockTimer?.invalidate(); examClockTimer = nil
-    }
-
-    private func restartTechniqueTimer() {
-        techniqueTimer?.invalidate()
-        progressTimer?.invalidate()
-        timerProgress = 1.0
-        startProgressTimer()
-        startTechniqueTimer()
-    }
-
-    private func startTechniqueTimer() {
-        let interval = TimeInterval(settings.intervalSeconds)
-        techniqueTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.advanceTechnique() }
-        }
-    }
-
-    private func startProgressTimer() {
-        let totalSteps = settings.intervalSeconds * 10   // update 10× per second
-        progressStep   = totalSteps
-        timerProgress  = 1.0
-        progressTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                self.progressStep -= 1
-                self.timerProgress = max(0, Double(self.progressStep) / Double(totalSteps))
-            }
-        }
-    }
-
-    private func startExamClock() {
-        examClockTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self, self.state == .running else { return }
-                self.examElapsed += 1
-                if self.examElapsed >= self.settings.examTimeMinutes * 60 {
-                    self.finish()
-                }
-            }
-        }
-    }
+    var isFeasible: Bool { profile.map { settings.canStart(profile: $0) } ?? false }
 
     /// Marks the current technique as done, picks the next one, and checks finish conditions.
     /// Exposed as `internal` so unit tests can drive state without real timers.
@@ -223,14 +174,8 @@ final class ExamViewModel: ObservableObject {
         // Mark current as done
         if let current = currentTechnic {
             doneCount += 1
-            playGong()
-            if settings.allowRepeat && !settings.randomize {
-                // Cycle: append done item back to end of queue
-                orderedQueue.append(current)
-            } else {
-                // Pool mode: mark as used so it won't reappear
-                usedIDs.insert(current.id)
-            }
+            queue?.markDone(current)
+            audio.playGong(enabled: settings.soundEnabled)
         }
 
         // Check finish conditions before picking next
@@ -238,130 +183,34 @@ final class ExamViewModel: ObservableObject {
             finish(); return
         }
 
-        // Pick next
-        let next = dequeueNext()
-        if next == nil && !settings.allowRepeat {
-            finish(); return          // pool exhausted in no-repeat mode
+        if queue?.isExhausted == true {
+            finish(); return
         }
-        currentTechnic = next
+        
+        currentTechnic = queue?.dequeueNext()
         speakCurrent()       // TTS after gong
-        restartProgressBar()
+        timers.resetProgress()
         notifyWatch()
-    }
-
-    private func restartProgressBar() {
-        progressTimer?.invalidate()
-        timerProgress = 1.0
-        startProgressTimer()
-    }
-
-    private func finish() {
-        stopTimers()
-        state = .finished
-    }
-
-    // MARK: – Technique selection
-
-    /// Returns the next technique to display.
-    /// Routing logic:
-    ///   - allowRepeat=true, randomize=false → pop from front of orderedQueue
-    ///   - allowRepeat=true, randomize=true  → random from full profile pool (excluding `exclude`)
-    ///   - allowRepeat=false, randomize=true → random from unseen pool
-    ///   - allowRepeat=false, randomize=false → first of unseen pool (original insertion order)
-    private func dequeueNext(excluding exclude: TechnicItem? = nil) -> TechnicItem? {
-        if settings.allowRepeat && !settings.randomize {
-            // Queue mode: consume from front
-            if orderedQueue.isEmpty { return nil }
-            let item = orderedQueue.removeFirst()
-            // If caller excluded this item (edge case during skip), defer it and try next
-            if let ex = exclude, item.id == ex.id {
-                orderedQueue.append(item)
-                return orderedQueue.isEmpty ? nil : orderedQueue.removeFirst()
-            }
-            return item
-        }
-
-        // Pool-based modes
-        var candidates = availablePool()
-        if let ex = exclude {
-            candidates = candidates.filter { $0.id != ex.id }
-        }
-        return settings.randomize ? candidates.randomElement() : candidates.first
-    }
-
-    /// Returns the pool of candidates eligible for selection.
-    /// When allowRepeat=false, excludes items already in usedIDs (done + skipped).
-    private func availablePool(excluding exclude: TechnicItem? = nil) -> [TechnicItem] {
-        guard let profile else { return [] }
-        var base = profile.technics
-        if !settings.allowRepeat {
-            base = base.filter { !usedIDs.contains($0.id) }
-        }
-        if let ex = exclude {
-            base = base.filter { $0.id != ex.id }
-        }
-        return base
-    }
-
-    // MARK: – Gong sound
-
-    private func configureAudioSession() {
-        let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playback, options: .mixWithOthers)
-        try? session.setActive(true)
-    }
-
-    private func playGong() {
-        guard settings.soundEnabled else { return }
-        if let url = Bundle.main.url(forResource: "gong", withExtension: "caf") {
-            configureAudioSession()
-            audioPlayer = try? AVAudioPlayer(contentsOf: url)
-            audioPlayer?.volume = 1.0
-            audioPlayer?.play()
-        } else {
-            AudioServicesPlaySystemSound(1304)
-        }
     }
 
     // MARK: – TTS
 
     private func speakCurrent() {
-        guard settings.ttsEnabled, let technic = currentTechnic, let resolve = nameResolver else { return }
-        synthesizer.stopSpeaking(at: .immediate)
-        let text = [
-            resolve(technic.positionKey, .position),
-            resolve(technic.attackKey,   .attack),
-            resolve(technic.techniqueKey, .technique)
-        ].joined(separator: ". ")
-        let delay = audioPlayer?.duration ?? 0.2
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-            self?.speak(text: text)
-        }
+        guard let tc = currentTechnic, let resolve = speechTextResolver else { return }
+        let text = [resolve(tc.positionKey, .position),
+                    resolve(tc.attackKey,   .attack),
+                    resolve(tc.techniqueKey, .technique)].joined(separator: ". ")
+        audio.speakAfterGong(text: text, enabled: settings.ttsEnabled, gongEnabled: settings.soundEnabled)
     }
     
     func speak(text: String) {
-        synthesizer.stopSpeaking(at: .immediate)
-        let utterance = AVSpeechUtterance(string: text)
-        utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.85
-        utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
-        synthesizer.speak(utterance)
+        audio.speakNow(text: text)
     }
 
-    private func stopAudio() {
-        audioPlayer?.stop()
-        synthesizer.stopSpeaking(at: .immediate)
+    private func syncVoice() {
+        audio.voiceIdentifier = settings.voiceIdentifier
     }
-
-    private func pauseAudio() {
-        audioPlayer?.pause()
-        synthesizer.pauseSpeaking(at: .immediate)
-    }
-
-    private func resumeAudio() {
-        audioPlayer?.play()
-        synthesizer.continueSpeaking()
-    }
-
+    
     // MARK: – Watch sync
 
     private func notifyWatch() {

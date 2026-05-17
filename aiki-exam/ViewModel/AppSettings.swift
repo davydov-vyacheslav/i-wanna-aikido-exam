@@ -27,6 +27,7 @@ private enum UDKey {
     static let soundEnabled     = "soundEnabled"
     static let ttsEnabled       = "ttsEnabled"
     static let activeProfileID  = "activeProfileID"
+    static let voiceIdentifier  = "voiceIdentifier"
 }
 
 // MARK: – AppSettings
@@ -34,6 +35,7 @@ private enum UDKey {
 final class AppSettings: ObservableObject {
 
     static let shared = AppSettings()
+    static let defaultVoiceIdentifier = "com.apple.voice.enhanced.ja-JP.Otoya"
 
     @Published var randomize: Bool       { didSet { ud.set(randomize,       forKey: UDKey.randomize) } }
     @Published var examMode: ExamMode    { didSet { ud.set(examMode.rawValue, forKey: UDKey.examMode) } }
@@ -43,6 +45,7 @@ final class AppSettings: ObservableObject {
     @Published var allowRepeat: Bool     { didSet { ud.set(allowRepeat,      forKey: UDKey.allowRepeat) } }
     @Published var soundEnabled: Bool    { didSet { ud.set(soundEnabled,     forKey: UDKey.soundEnabled) } }
     @Published var ttsEnabled: Bool      { didSet { ud.set(ttsEnabled,       forKey: UDKey.ttsEnabled) } }
+    @Published var voiceIdentifier: String { didSet { ud.set(voiceIdentifier,  forKey: UDKey.voiceIdentifier) } }
     @Published var activeProfileID: UUID? {
         didSet { ud.set(activeProfileID?.uuidString, forKey: UDKey.activeProfileID) }
     }
@@ -63,8 +66,9 @@ final class AppSettings: ObservableObject {
         examCountTarget:  Int      = 10,
         examTimeMinutes:  Int      = 5,
         intervalSeconds:  Int      = 30,
-        soundEnabled:     Bool     = true,
-        ttsEnabled:       Bool     = true,
+        soundEnabled:     Bool     = false,
+        ttsEnabled:       Bool     = false,
+        voiceIdentifier:  String   = AppSettings.defaultVoiceIdentifier,
         activeProfileID:  UUID?    = nil
     ) {
         self.ud = userDefaults
@@ -77,6 +81,7 @@ final class AppSettings: ObservableObject {
         self.soundEnabled = userDefaults.bool(forKey: UDKey.soundEnabled, default: soundEnabled)
         self.ttsEnabled = userDefaults.bool(forKey: UDKey.ttsEnabled, default: ttsEnabled)
         self.activeProfileID = userDefaults.uuid(forKey: UDKey.activeProfileID) ?? activeProfileID
+        self.voiceIdentifier = userDefaults.string(forKey: UDKey.voiceIdentifier) ?? voiceIdentifier
     }
 
     // MARK: – Feasibility

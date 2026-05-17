@@ -36,16 +36,23 @@ final class VocabularyItem {
     var key: String
     private var typeRaw: String
     var displayName: String
+    var pronunciation: String?
 
     var type: VocabularyType {
         get { VocabularyType(rawValue: typeRaw) ?? .technique }
         set { typeRaw = newValue.rawValue }
     }
 
-    init(key: String, type: VocabularyType, displayName: String) {
+    init(key: String, type: VocabularyType, displayName: String, pronunciation: String?) {
         self.id          = UUID()
         self.key         = key
         self.typeRaw     = type.rawValue
         self.displayName = displayName
+        self.pronunciation = pronunciation
     }
+    
+    var speechText: String {
+        get { pronunciation ?? displayName }
+    }
+
 }

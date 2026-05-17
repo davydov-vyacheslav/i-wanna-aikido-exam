@@ -41,6 +41,12 @@ struct ExamView: View {
 
     private func rebind() {
         vm.nameResolver = { [vocabStore] key, type in vocabStore.displayName(for: key, type: type) }
+        vm.speechTextResolver = { [vocabStore, audio = ExamAudio.shared] key, type in
+            let pronunciation = vocabStore.speechText(for: key, type: type)
+            return audio.canCurrentVoiceSpeak(pronunciation)
+                ? pronunciation
+                : vocabStore.displayName(for: key, type: type)
+        }
         vm.bind(profile: activeProfile)
     }
 

@@ -7,64 +7,92 @@ vocab:
   positions:
     - key: tachi_waza
       name: "Tachi Waza"
+      pronunciation: "たちわざ"
     - key: suwari_waza
       name: "Suwari Waza"
+      pronunciation: "すわりわざ"
     - key: hanmi_handachi
       name: "Hanmi Handachi"
+      pronunciation: "はんみはんだち"
 
   attacks:
     - key: shomen_uchi
       name: "Shomen Uchi"
+      pronunciation: "正面打ち"
     - key: yokomen_uchi
       name: "Yokomen Uchi"
+      pronunciation: "横面打ち"
     - key: tsuki
       name: "Tsuki"
+      pronunciation: "つき"
     - key: katate_dori
       name: "Katate Dori"
+      pronunciation: "片手取り"
     - key: kata_dori
       name: "Kata Dori"
+      pronunciation: "肩取り"
     - key: kata_dori_menuchi
       name: "Kata Dori Men Uchi"
+      pronunciation: "肩取り面打ち"
     - key: ryote_dori
       name: "Ryote Dori"
+      pronunciation: "両手取り"
     - key: morote_dori
       name: "Morote Dori"
+      pronunciation: "もろてどり"
     - key: ushiro_ryote_dori
       name: "Ushiro Ryote Dori"
+      pronunciation: "後ろ両手取り"
     - key: ushiro_ryokata_dori
       name: "Ushiro Ryokata Dori"
+      pronunciation: "後ろ両肩取り"
     - key: ushiro_kubishime
       name: "Ushiro Kubishime"
+      pronunciation: "後ろ首締め"
 
   techniques:
     - key: ikkyo
       name: "Ikkyo"
+      pronunciation: "いっきょう"
     - key: nikyo
       name: "Nikyo"
+      pronunciation: "二教"
     - key: sankyo
       name: "Sankyo"
+      pronunciation: "三教"
     - key: yonkyo
       name: "Yonkyo"
+      pronunciation: "四教"
     - key: gokyo
       name: "Gokyo"
+      pronunciation: "五教"
     - key: irimi_nage
       name: "Irimi Nage"
+      pronunciation: "いりみなげ"
     - key: tenchi_nage
       name: "Tenchi Nage"
+      pronunciation: "天地投げ"
     - key: kote_gaeshi
       name: "Kote Gaeshi"
+      pronunciation: "小手返し"
     - key: shiho_nage
       name: "Shiho Nage"
+      pronunciation: "しほうなげ"
     - key: kaiten_nage
       name: "Kaiten Nage"
+      pronunciation: "回転投げ"
     - key: juji_nage
       name: "Juji Nage"
+      pronunciation: "十字投げ"
     - key: koshi_nage
       name: "Koshi Nage"
+      pronunciation: "腰投げ"
     - key: kokyu_ho
       name: "Kokyu Ho"
+      pronunciation: "呼吸法"
     - key: kokyu_nage
       name: "Kokyu Nage"
+      pronunciation: "呼吸投げ"
 
 
 # ── Presets ────────────────────────────────────────────────────────────────────

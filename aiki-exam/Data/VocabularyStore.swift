@@ -47,6 +47,19 @@ final class VocabularyStore: ObservableObject {
         items(for: type).first { $0.key == key }?.displayName ?? key
     }
 
+    func speechText(for key: String, type: VocabularyType) -> String {
+        let item = items(for: type).first { $0.key == key }
+        return item?.speechText ?? key
+    }
+
+    func resolvedSpeechText(for item: VocabularyItem) -> String {
+        let pronunciation = item.pronunciation?.trimmingCharacters(in: .whitespaces) ?? ""
+        guard !pronunciation.isEmpty else { return item.displayName }
+        return ExamAudio.shared.canCurrentVoiceSpeak(pronunciation)
+            ? pronunciation
+            : item.displayName
+    }
+    
     func items(for type: VocabularyType) -> [VocabularyItem] {
         switch type {
         case .position:  return positions
@@ -58,7 +71,7 @@ final class VocabularyStore: ObservableObject {
     // MARK: – CRUD
 
     /// Adds a new custom vocab item. Throws if name is empty or a duplicate.
-    func add(displayName: String, type: VocabularyType) throws {
+    func add(displayName: String, type: VocabularyType, pronounce: String) throws {
         let trimmed = displayName.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { throw VocabularyError.emptyName }
         guard !items(for: type).contains(where: { $0.displayName.lowercased() == trimmed.lowercased() }) else {
@@ -66,18 +79,19 @@ final class VocabularyStore: ObservableObject {
         }
         let key = trimmed.lowercased()
             .components(separatedBy: .whitespaces).joined(separator: "_")
-        context.insert(VocabularyItem(key: key, type: type, displayName: trimmed))
+        context.insert(VocabularyItem(key: key, type: type, displayName: trimmed, pronunciation: pronounce))
         refresh()
     }
 
     /// Renames any item (preset or custom). Throws on empty name or duplicate.
-    func rename(_ item: VocabularyItem, to newName: String) throws {
+    func rename(_ item: VocabularyItem, to newName: String, pronounce: String) throws {
         let trimmed = newName.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { throw VocabularyError.emptyName }
         guard !items(for: item.type).contains(where: {
             $0.id != item.id && $0.displayName.lowercased() == trimmed.lowercased()
         }) else { throw VocabularyError.duplicate }
         item.displayName = trimmed
+        item.pronunciation = pronounce
         refresh()
     }
 

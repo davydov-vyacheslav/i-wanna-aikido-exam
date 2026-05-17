@@ -15,14 +15,14 @@ struct VocabularyManagerView: View {
     // Add sheet state
     @State private var addType:    VocabularyType?
     @State private var addName     = ""
+    @State private var addPronounce = ""
     // Rename alert state
     @State private var renameItem: VocabularyItem?
     @State private var renameName  = ""
+    @State private var renamePronounce  = ""
     // Error alert
     @State private var errorMsg:   String?
     
-    @StateObject private var vm = ExamViewModel(settings: .shared)
-
     var body: some View {
         NavigationStack {
             List {
@@ -34,6 +34,7 @@ struct VocabularyManagerView: View {
                         Button {
                             addType = type
                             addName = ""
+                            addPronounce = ""
                         } label: {
                             Label("Add \(type.label)", systemImage: "plus.circle")
                                 .font(.callout)
@@ -54,6 +55,7 @@ struct VocabularyManagerView: View {
                 set: { if !$0 { renameItem = nil } }
             )) {
                 TextField(".label.vocabulary.displayName", text: $renameName)
+                TextField(".label.vocabulary.pronounce", text: $renamePronounce)
                 Button(".button.common.cancel", role: .cancel) { renameItem = nil }
                 Button(".button.common.save") { commitRename() }
             }
@@ -74,31 +76,36 @@ struct VocabularyManagerView: View {
     private func row(_ item: VocabularyItem) -> some View {
         HStack {
             Text(item.displayName)
+
+            Spacer()
+
             Button {
-                vm.speak(text: item.displayName) // FIXME: pronounce
+                ExamAudio.shared.speakNow(text: vocabStore.resolvedSpeechText(for: item))
             } label: {
                 Image(systemName: "speaker.wave.2")
                     .foregroundColor(.secondary)
                     .font(.callout)
             }
             .buttonStyle(.borderless)
-            Spacer()
-            if allProfiles.contains(where: { p in p.technics.contains { tc in
+
+            let isLocked = allProfiles.contains(where: { p in p.technics.contains { tc in
                 switch item.type {
                 case .position:  return tc.positionKey  == item.key
                 case .attack:    return tc.attackKey    == item.key
                 case .technique: return tc.techniqueKey == item.key
                 }
-            }}) {
-                Image(systemName: "lock.fill")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            }
+            }})
+            Image(systemName: "lock.fill")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+                .opacity(isLocked ? 1 : 0)
+
         }
         .contentShape(Rectangle())
         .onTapGesture {
             renameItem = item
             renameName = item.displayName
+            renamePronounce = item.pronunciation ?? ""
         }
         .swipeActions(edge: .trailing) {
             Button(role: .destructive) {
@@ -117,6 +124,8 @@ struct VocabularyManagerView: View {
             Form {
                 Section(".label.vocabulary.displayName") {
                     TextField(".placeholder.vocabulary.displayName", text: $addName)
+                        .autocorrectionDisabled()
+                    TextField(".placeholder.vocabulary.pronounce", text: $addPronounce)
                         .autocorrectionDisabled()
                 }
             }
@@ -139,7 +148,7 @@ struct VocabularyManagerView: View {
 
     private func commitAdd(type: VocabularyType) {
         do {
-            try vocabStore.add(displayName: addName, type: type)
+            try vocabStore.add(displayName: addName, type: type, pronounce: addPronounce)
             addType = nil
         } catch {
             addType = nil
@@ -150,7 +159,7 @@ struct VocabularyManagerView: View {
     private func commitRename() {
         guard let item = renameItem else { return }
         do {
-            try vocabStore.rename(item, to: renameName)
+            try vocabStore.rename(item, to: renameName, pronounce: renamePronounce)
         } catch {
             errorMsg = error.localizedDescription
         }
