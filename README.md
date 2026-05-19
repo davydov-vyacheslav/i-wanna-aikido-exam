@@ -1,6 +1,7 @@
 # I Wanna Aikido Exam
 
 Practice and exam helper for Aikido practitioners.
+AppStore link: https://apps.apple.com/us/app/aiki-exam/id6759937736
 
 ## What it does
 
